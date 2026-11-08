@@ -50,6 +50,9 @@ type ResolvedEndpoint struct {
 	// providers. Empty means "let the AWS SDK decide".
 	AWSProfile string
 	AWSRegion  string
+
+	// AgentCommand is the shell command ProtocolAgentCLI runs for each model call.
+	AgentCommand string
 }
 
 // Environment variable names for OCR-specific configuration.
@@ -70,6 +73,8 @@ const (
 	// (OCR env, config file, provider config, Claude Code env, shell RC).
 	envOCRLLMTimeout   = "OCR_LLM_TIMEOUT"
 	envOCRUseAnthropic = "OCR_USE_ANTHROPIC"
+	// envOCRAgentCLICommand is the shell command the agent-cli protocol runs.
+	envOCRAgentCLICommand = "OCR_AGENT_CLI_COMMAND"
 )
 
 // Environment variable names from Claude Code configuration.
@@ -280,6 +285,9 @@ func tryOCREnv(modelOverride string) (ResolvedEndpoint, bool, error) {
 	if modelOverride != "" {
 		model = modelOverride
 	}
+	if NormalizeProtocol(os.Getenv(envOCRLLMProtocol)) == ProtocolAgentCLI {
+		return agentCLIEndpoint(model)
+	}
 	if url == "" || token == "" || model == "" {
 		return ResolvedEndpoint{}, false, nil
 	}
@@ -327,6 +335,16 @@ func tryOCREnv(modelOverride string) (ResolvedEndpoint, bool, error) {
 	}
 
 	return ResolvedEndpoint{URL: url, Token: token, Model: model, Protocol: protocol, AuthHeader: authHeader, Source: "OCR environment"}, true, nil
+}
+
+// agentCLIEndpoint builds the agent-cli endpoint from the environment. The CLI
+// holds its own login, so the endpoint needs no URL or token.
+func agentCLIEndpoint(model string) (ResolvedEndpoint, bool, error) {
+	command := strings.TrimSpace(os.Getenv(envOCRAgentCLICommand))
+	if command == "" {
+		return ResolvedEndpoint{}, false, fmt.Errorf("OCR environment: protocol %q requires %s", ProtocolAgentCLI, envOCRAgentCLICommand)
+	}
+	return ResolvedEndpoint{Model: model, Protocol: ProtocolAgentCLI, AgentCommand: command, AmbientAuth: true, Source: "OCR environment"}, true, nil
 }
 
 // llmFileConfig represents the llm section in config.json.

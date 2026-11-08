@@ -226,6 +226,26 @@ calling — see
 ["No tool calls parsed" (local models / Ollama)](../faq/#no-tool-calls-parsed-local-models-ollama)
 in the FAQ before picking one.
 
+### Running through a coding-agent CLI
+
+The `agent-cli` protocol runs each model call as one headless session of a
+coding-agent CLI, so a review can use that CLI's own subscription login instead
+of an API key. Run `ocr` from the repository root, and name the command in
+`OCR_AGENT_CLI_COMMAND`. `{prompt}` and `{model}` are filled in for each call:
+
+```bash
+export OCR_LLM_PROTOCOL=agent-cli
+export OCR_LLM_MODEL=gemini-3.8-flash-low
+export OCR_AGENT_CLI_COMMAND='agy --dangerously-skip-permissions --print-timeout 24h --add-dir "$PWD" --model {model} --prompt={prompt} </dev/null'
+ocr review --from main --to HEAD
+```
+
+A session reads the code with the CLI's own tools and writes its answer to a file
+under `.ocr-agent/` in the working directory, removed when the call ends. The CLI
+reports no token usage to OCR, so `--max-tokens-budget` has no effect on this
+protocol. `OCR_LLM_TIMEOUT` limits each session; without it the task budget from
+`--timeout` applies.
+
 ### Timeouts
 
 Task and request timeouts are independent:
