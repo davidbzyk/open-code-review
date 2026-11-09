@@ -27,8 +27,11 @@ inputs:
     required: true
   llm_protocol:
     description: >-
-      Explicit LLM protocol written to `llm.protocol`: anthropic, openai or
-      openai-responses (case-insensitive). When set it wins over
+      Explicit LLM protocol written to `llm.protocol`: anthropic, openai,
+      openai-responses or agent-cli (case-insensitive). agent-cli runs each
+      model call as one session of the OCR_AGENT_CLI_COMMAND environment
+      variable, checks out the PR head first, and is only for pull requests
+      whose author you already trust. When set it wins over
       llm_use_anthropic, which is mirrored from it the way `ocr config set
       llm.protocol` mirrors the boolean. Leave empty to keep deriving the
       protocol from llm_use_anthropic; an OCR_LLM_PROTOCOL variable in the
@@ -82,7 +85,9 @@ inputs:
     required: false
     default: ${{ github.token }}
   ocr_version:
-    description: npm version spec for @alibaba-group/open-code-review (v1.9.6 or newer required).
+    description: >-
+      npm version spec for @alibaba-group/open-code-review (v1.9.6 or newer required), or
+      `source` to build this checkout of the action with Go.
     required: false
     default: latest
   review_concurrency:
@@ -536,6 +541,13 @@ runs:
         esac
         echo "RESOLVE_OUTDATED=$NORMALIZED_RESOLVE_OUTDATED" >> "$GITHUB_ENV"
 
+    - name: Setup Go for a source build
+      if: inputs.ocr_version == 'source'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: false
+
     - name: Install OpenCodeReview
       shell: bash
       env:
@@ -547,7 +559,16 @@ runs:
         # and silently changes the runtime during one action execution.
         OCR_NO_UPDATE: "1"
       run: |
-        npm install -g "@alibaba-group/open-code-review@${OCR_VERSION}"
+        if [ "$OCR_VERSION" = "source" ]; then
+          # Build this checkout of the action; agent-cli is not in the published package.
+          OCR_BIN_DIR="$HOME/.local/bin"
+          mkdir -p "$OCR_BIN_DIR"
+          (cd "$GITHUB_ACTION_PATH" && CGO_ENABLED=0 go build -ldflags "-X main.Version=v1.13.6+agent-cli" -o "$OCR_BIN_DIR/ocr" ./cmd/opencodereview)
+          export PATH="$OCR_BIN_DIR:$PATH"
+          echo "$OCR_BIN_DIR" >> "$GITHUB_PATH"
+        else
+          npm install -g "@alibaba-group/open-code-review@${OCR_VERSION}"
+        fi
         echo "OpenCodeReview installed:"
         OCR_VERSION_OUTPUT="$(ocr version 2>/dev/null)" || {
           echo "::error::Unable to read the installed OpenCodeReview version"
@@ -639,8 +660,18 @@ runs:
             OCR_USE_ANTHROPIC="false"
             OCR_LLM_PROTOCOL="$EXPLICIT_PROTOCOL"
             ;;
+          agent-cli)
+            if [ -z "${OCR_AGENT_CLI_COMMAND:-}" ]; then
+              echo "::error::llm_protocol agent-cli requires the OCR_AGENT_CLI_COMMAND environment variable"
+              exit 1
+            fi
+            OCR_USE_ANTHROPIC="false"
+            OCR_LLM_PROTOCOL="agent-cli"
+            # The review resolves agent-cli from its environment, not the config file.
+            echo "OCR_LLM_PROTOCOL=agent-cli" >> "$GITHUB_ENV"
+            ;;
           *)
-            echo "::error::llm_protocol must be anthropic, openai or openai-responses (got '${EXPLICIT_PROTOCOL}')"
+            echo "::error::llm_protocol must be anthropic, openai, openai-responses or agent-cli (got '${EXPLICIT_PROTOCOL}')"
             exit 1
             ;;
         esac
@@ -981,6 +1012,17 @@ runs:
         if [ -z "${REVIEW_TASK_TIMEOUT:-}" ]; then
           echo "::error::Validated review_task_timeout is missing; the Validate inputs step must complete first"
           exit 1
+        fi
+        if [ "${OCR_LLM_PROTOCOL_EXPLICIT:-}" = "agent-cli" ]; then
+          # A session reads the working tree with its CLI's own tools, so the tree must be the
+          # commit under review; only callers that trust the PR head may use agent-cli. It can
+          # also read .git, so the job token the checkout step persisted goes first.
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --local --name-only --get-regexp '^includeif\.gitdir:' | while read -r key; do
+            rm -f "$(git config --local "$key")"
+            git config --local --unset-all "$key"
+          done || true
+          git checkout --quiet --detach "${HEAD_SHA}"
         fi
         ARGS=(--from "${RANGE_FROM:-$MERGE_BASE}" --to "${HEAD_SHA}")
         # stream_progress 'false' (default): agent audience, stderr captured to

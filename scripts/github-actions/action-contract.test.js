@@ -2086,7 +2086,116 @@ function testPostReviewCommentsWiresAppSlug() {
   );
 }
 
+function writeFakeGit(fixture) {
+  const script = `#!/usr/bin/env node
+const fs = require("fs");
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.OCR_CALLS, JSON.stringify({ git: args }) + "\\n");
+if (args.includes("--get-regexp")) process.stdout.write("includeif.gitdir:/w/.git.path\\n");
+else if (args[0] === "config" && args.includes("includeif.gitdir:/w/.git.path") && !args.includes("--unset-all")) {
+  process.stdout.write(process.env.OCR_FAKE_CREDENTIAL_FILE + "\\n");
+}
+`;
+  fs.writeFileSync(path.join(fixture.bin, "git"), script, { mode: 0o755 });
+}
+
+function testConfigureAcceptsAgentCliProtocol() {
+  const configure = stepNamed("Configure OCR");
+  const values = inputValues({ llm_model: "contract-model", llm_protocol: "agent-cli", llm_url: "" });
+  const fixture = makeFixture();
+  try {
+    const result = runStep(configure, values, fixture, { OCR_AGENT_CLI_COMMAND: "fake {prompt}" });
+    assert.strictEqual(result.status, 0, `agent-cli must configure; ${resultDescription(result)}`);
+    assert.strictEqual(configValues(configOperations(fixture))["llm.protocol"], "agent-cli");
+    assert.strictEqual(
+      readEnvAssignments(path.join(fixture.dir, "github-env")).OCR_LLM_PROTOCOL,
+      "agent-cli",
+      "the Run step resolves agent-cli from its environment, so Configure must export it"
+    );
+  } finally {
+    removeFixture(fixture);
+  }
+  const missing = makeFixture();
+  try {
+    const result = runStep(configure, values, missing, { OCR_AGENT_CLI_COMMAND: "" });
+    assert.notStrictEqual(result.status, 0, "agent-cli without a command must fail before the review");
+    assert.match(`${result.stdout}\n${result.stderr}`, /::error::.*OCR_AGENT_CLI_COMMAND/);
+  } finally {
+    removeFixture(missing);
+  }
+}
+
+function testInstallBuildsThisCheckoutForSourceVersion() {
+  const fixture = makeFixture();
+  try {
+    const goScript = `#!/usr/bin/env node
+require("fs").appendFileSync(process.env.OCR_CALLS, JSON.stringify({ go: process.argv.slice(2), cwd: process.cwd() }) + "\\n");
+`;
+    fs.writeFileSync(path.join(fixture.bin, "go"), goScript, { mode: 0o755 });
+    const result = runStep(installStep(), inputValues({ ocr_version: "source" }), fixture, {
+      HOME: fixture.dir,
+      GITHUB_ACTION_PATH: ROOT,
+      GITHUB_PATH: path.join(fixture.dir, "github-path"),
+    });
+    assert.strictEqual(result.status, 0, `source install failed; ${resultDescription(result)}`);
+    assert.deepStrictEqual(readJsonLines(fixture.npmCallsPath), [], "a source build must not touch npm");
+    const build = readJsonLines(fixture.callsPath).find((call) => call.go);
+    assert.ok(build, "ocr_version source must run go build");
+    assert.strictEqual(build.go[0], "build");
+    assert.strictEqual(fs.realpathSync(build.cwd), fs.realpathSync(ROOT), "the build must use the action's own checkout");
+    assert.ok(build.go.includes("./cmd/opencodereview"));
+    assert.match(fs.readFileSync(path.join(fixture.dir, "github-path"), "utf8"), /\.local\/bin/);
+  } finally {
+    removeFixture(fixture);
+  }
+}
+
+function testRunPreparesWorkingTreeOnlyForAgentCli() {
+  const run = stepNamed("Run OpenCodeReview");
+  const values = inputValues({ llm_model: "contract-model" });
+  const env = { MERGE_BASE: "base-sha", HEAD_SHA: "head-sha", REVIEW_TASK_TIMEOUT: "15" };
+  const fixture = makeFixture();
+  try {
+    writeFakeGit(fixture);
+    const credential = path.join(fixture.dir, "git-credentials.config");
+    fs.writeFileSync(credential, "token");
+    const result = runStep(run, values, fixture, Object.assign({}, env, {
+      OCR_LLM_PROTOCOL_EXPLICIT: "agent-cli",
+      OCR_FAKE_CREDENTIAL_FILE: credential,
+    }), { replaceResultPaths: true });
+    assert.strictEqual(result.status, 0, `agent-cli run failed; ${resultDescription(result)}`);
+    const calls = readJsonLines(fixture.callsPath);
+    const checkout = calls.findIndex((call) => call.git && call.git[0] === "checkout");
+    const review = calls.findIndex((call) => call.args && call.args[0] === "review");
+    assert.ok(checkout >= 0 && checkout < review, "the head must be checked out before the review");
+    assert.deepStrictEqual(calls[checkout].git, ["checkout", "--quiet", "--detach", "head-sha"]);
+    assert.ok(
+      calls.slice(0, checkout).some((call) => call.git && call.git.includes("http.https://github.com/.extraheader")),
+      "the persisted job token must go before a session can read .git"
+    );
+    assert.strictEqual(fs.existsSync(credential), false, "the persisted credentials file must be removed");
+  } finally {
+    removeFixture(fixture);
+  }
+  const ordinary = makeFixture();
+  try {
+    writeFakeGit(ordinary);
+    const result = runStep(run, values, ordinary, env, { replaceResultPaths: true });
+    assert.strictEqual(result.status, 0, `ordinary run failed; ${resultDescription(result)}`);
+    assert.deepStrictEqual(
+      readJsonLines(ordinary.callsPath).filter((call) => call.git),
+      [],
+      "other protocols keep PR files out of the working tree"
+    );
+  } finally {
+    removeFixture(ordinary);
+  }
+}
+
 const TESTS = [
+  ["llm_protocol accepts agent-cli and exports it", testConfigureAcceptsAgentCliProtocol],
+  ["ocr_version source builds the action's own checkout", testInstallBuildsThisCheckoutForSourceVersion],
+  ["agent-cli alone puts the PR head in the working tree", testRunPreparesWorkingTreeOnlyForAgentCli],
   ["review_task_timeout names and describes the CLI task deadline", testReviewTaskTimeoutInputNameAndScope],
   ["llm_timeout defaults to the CLI's 5-minute timeout", testLlmTimeoutInputDefault],
   ["review_task_timeout accepts 1/10/120", testReviewTimeoutValidationAcceptsBoundaries],
