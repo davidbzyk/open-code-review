@@ -169,6 +169,7 @@ func executeReviewContext(ctx context.Context, opts reviewOptions) (retErr error
 	if err != nil {
 		return err
 	}
+	opts.concurrency = reviewConcurrency(rt.Client, opts.concurrency)
 	maxTokens, err := resolveMaxTokens(cc.Template.MaxTokens, rt.AppCfg, opts.maxTokens)
 	if err != nil {
 		return err
@@ -626,4 +627,13 @@ func buildToolRegistry(collector *tool.CommentCollector, fr *tool.FileReader) *t
 	reg.Register(tool.NewCodeSearch(fr))
 	reg.Register(&tool.CodeCommentProvider{Collector: collector})
 	return reg
+}
+
+// reviewConcurrency returns the run's concurrency: agent-step replays calls by
+// their order, so it runs one at a time and every other client keeps the flag.
+func reviewConcurrency(client llm.LLMClient, requested int) int {
+	if _, ok := client.(*llm.AgentStepClient); ok {
+		return 1
+	}
+	return requested
 }

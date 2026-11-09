@@ -38,6 +38,9 @@ const (
 	// ProtocolAgentCLI runs each model call as a headless session of a
 	// coding-agent CLI, which brings its own login and code-reading tools.
 	ProtocolAgentCLI = "agent-cli"
+	// ProtocolAgentStep hands each model call to an outside runner, which starts
+	// one agent per call and leaves the answer on disk for the next run to replay.
+	ProtocolAgentStep = "agent-step"
 )
 
 // NormalizeProtocol canonicalizes protocol names. It is case-insensitive and
@@ -60,6 +63,8 @@ func NormalizeProtocol(raw string) string {
 		return ProtocolAnthropicBedrock
 	case ProtocolAgentCLI:
 		return ProtocolAgentCLI
+	case ProtocolAgentStep:
+		return ProtocolAgentStep
 	default:
 		return normalized
 	}
@@ -69,9 +74,9 @@ func NormalizeProtocol(raw string) string {
 // everything else.
 func ValidateProtocol(p string) error {
 	switch p {
-	case ProtocolAnthropic, ProtocolOpenAIChatCompletions, ProtocolOpenAIResponses, ProtocolAnthropicBedrock, ProtocolAgentCLI:
+	case ProtocolAnthropic, ProtocolOpenAIChatCompletions, ProtocolOpenAIResponses, ProtocolAnthropicBedrock, ProtocolAgentCLI, ProtocolAgentStep:
 		return nil
 	default:
-		return fmt.Errorf("unsupported protocol %q; supported protocols are %q, %q, %q, %q, %q", p, ProtocolAnthropic, ProtocolOpenAIChatCompletions, ProtocolOpenAIResponses, ProtocolAnthropicBedrock, ProtocolAgentCLI)
+		return fmt.Errorf("unsupported protocol %q; supported protocols are %q, %q, %q, %q, %q, %q", p, ProtocolAnthropic, ProtocolOpenAIChatCompletions, ProtocolOpenAIResponses, ProtocolAnthropicBedrock, ProtocolAgentCLI, ProtocolAgentStep)
 	}
 }

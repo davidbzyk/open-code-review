@@ -53,6 +53,8 @@ type ResolvedEndpoint struct {
 
 	// AgentCommand is the shell command ProtocolAgentCLI runs for each model call.
 	AgentCommand string
+	// AgentStepDir is where ProtocolAgentStep keeps each model call's job and answer.
+	AgentStepDir string
 }
 
 // Environment variable names for OCR-specific configuration.
@@ -75,6 +77,8 @@ const (
 	envOCRUseAnthropic = "OCR_USE_ANTHROPIC"
 	// envOCRAgentCLICommand is the shell command the agent-cli protocol runs.
 	envOCRAgentCLICommand = "OCR_AGENT_CLI_COMMAND"
+	// envOCRAgentStepDir is the folder the agent-step protocol keeps its calls in.
+	envOCRAgentStepDir = "OCR_STEP_DIR"
 )
 
 // Environment variable names from Claude Code configuration.
@@ -285,8 +289,11 @@ func tryOCREnv(modelOverride string) (ResolvedEndpoint, bool, error) {
 	if modelOverride != "" {
 		model = modelOverride
 	}
-	if NormalizeProtocol(os.Getenv(envOCRLLMProtocol)) == ProtocolAgentCLI {
+	switch NormalizeProtocol(os.Getenv(envOCRLLMProtocol)) {
+	case ProtocolAgentCLI:
 		return agentCLIEndpoint(model)
+	case ProtocolAgentStep:
+		return agentStepEndpoint(model)
 	}
 	if url == "" || token == "" || model == "" {
 		return ResolvedEndpoint{}, false, nil
@@ -345,6 +352,16 @@ func agentCLIEndpoint(model string) (ResolvedEndpoint, bool, error) {
 		return ResolvedEndpoint{}, false, fmt.Errorf("OCR environment: protocol %q requires %s", ProtocolAgentCLI, envOCRAgentCLICommand)
 	}
 	return ResolvedEndpoint{Model: model, Protocol: ProtocolAgentCLI, AgentCommand: command, AmbientAuth: true, Source: "OCR environment"}, true, nil
+}
+
+// agentStepEndpoint builds the agent-step endpoint from the environment. The
+// runner's agents hold their own logins, so the endpoint needs no URL or token.
+func agentStepEndpoint(model string) (ResolvedEndpoint, bool, error) {
+	dir := strings.TrimSpace(os.Getenv(envOCRAgentStepDir))
+	if dir == "" {
+		return ResolvedEndpoint{}, false, fmt.Errorf("OCR environment: protocol %q requires %s", ProtocolAgentStep, envOCRAgentStepDir)
+	}
+	return ResolvedEndpoint{Model: model, Protocol: ProtocolAgentStep, AgentStepDir: dir, AmbientAuth: true, Source: "OCR environment"}, true, nil
 }
 
 // llmFileConfig represents the llm section in config.json.

@@ -399,6 +399,7 @@ type FunctionDef struct {
 // ClientConfig holds configuration for connecting to an LLM service.
 type ClientConfig struct {
 	AgentCommand          string            // Shell command for ProtocolAgentCLI; {prompt} and {model} are filled per call
+	AgentStepDir          string            // Folder for ProtocolAgentStep's calls
 	URL                   string            // Full API endpoint URL
 	APIKey                string            // Bearer token / API key
 	Model                 string            // Default model override
@@ -503,10 +504,13 @@ func NewLLMClient(ep ResolvedEndpoint, collector *RetryCollector, raw *RawHolder
 		AWSProfile:            ep.AWSProfile,
 		AWSRegion:             ep.AWSRegion,
 		AgentCommand:          ep.AgentCommand,
+		AgentStepDir:          ep.AgentStepDir,
 	}
 	switch ep.Protocol {
 	case ProtocolAgentCLI:
 		return NewAgentCLIClient(cfg)
+	case ProtocolAgentStep:
+		return NewAgentStepClient(cfg)
 	case ProtocolAnthropic:
 		return NewAnthropicClient(cfg)
 	case ProtocolAnthropicBedrock:
