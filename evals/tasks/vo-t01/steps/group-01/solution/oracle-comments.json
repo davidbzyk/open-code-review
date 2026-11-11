@@ -1,0 +1,42 @@
+[
+  {
+    "path": "src-tauri/sidecar/server.py",
+    "content": "The /health endpoint decides whether Whisper is downloaded by looking only at one hard-coded model (large-v3-turbo), so when a different registered Whisper model is the one downloaded or selected, the health report says Whisper is missing.",
+    "start_line": 703,
+    "end_line": 703,
+    "category": "bug",
+    "severity": "high"
+  },
+  {
+    "path": "src-tauri/sidecar/server.py",
+    "content": "The transcription endpoints call the blocking Whisper function directly inside async handlers, so a transcription freezes the sidecar's event loop and every other request (health checks, status polls) stalls until it finishes.",
+    "start_line": 733,
+    "end_line": 733,
+    "category": "bug",
+    "severity": "high"
+  },
+  {
+    "path": "src-tauri/sidecar/server.py",
+    "content": "When scanning the model cache raises, the failure is logged but the 'not downloaded' result is still stored in the 30 second cache, so a transient error makes an installed model look missing for the next 30 seconds.",
+    "start_line": 689,
+    "end_line": 689,
+    "category": "bug",
+    "severity": "high"
+  },
+  {
+    "path": "src-tauri/sidecar/tts.py",
+    "content": "An unknown Whisper model name is silently used as a Hugging Face repo id instead of being rejected, so a typo or a stale saved setting makes the sidecar try to download and load an arbitrary repository.",
+    "start_line": 161,
+    "end_line": 161,
+    "category": "bug",
+    "severity": "high"
+  },
+  {
+    "path": "src-tauri/src/models.rs",
+    "content": "The new delete-model command builds the sidecar URL by pasting the frontend-supplied model name into the path with no validation, so a name containing path segments reaches other sidecar routes with the DELETE method (for example a voice profile), outside the model routes the command is meant for.",
+    "start_line": 147,
+    "end_line": 147,
+    "category": "bug",
+    "severity": "high"
+  }
+]

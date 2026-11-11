@@ -28,3 +28,6 @@
 *.webp  binary
 *.bmp   binary
 *.tiff  binary
+
+# The eval tasks are written by evals/generator/generate.py, byte for byte.
+evals/tasks/** -text linguist-generated

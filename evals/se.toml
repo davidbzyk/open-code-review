@@ -1,0 +1,20 @@
+# The Open Code Review evals, read by Standard Envs when this repository is connected. Paths are
+# relative to the repository root, and the commands run from it.
+schema = 1
+
+[generate]
+# Rewrites the tasks from cases.toml, the orchestrator skill and the generator; a second run
+# changes nothing.
+command = ["python3", "evals/generator/generate.py"]
+output = "evals/tasks"
+
+[pipeline]
+# Moves whenever the generator, the baked skills, the cases or the commit `ocr` is built from move.
+digest_command = ["python3", "evals/generator/generate.py", "--digest"]
+
+[prompts]
+# The skills the tasks run on. Each task bakes a copy of the two it uses under `mirrors`, so an
+# edit to the delegate skill reaches the tasks in the same pull request. An edit to the
+# orchestrator skill also changes step instructions: run the generator after it.
+skills = ["skills"]
+mirrors = ["evals/tasks/*/environment/skills"]

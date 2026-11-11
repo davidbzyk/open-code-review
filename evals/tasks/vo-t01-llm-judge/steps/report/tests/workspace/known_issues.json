@@ -1,0 +1,47 @@
+[
+  {
+    "id": "vo-t01-k01",
+    "title": "The /health endpoint decides whether Whisper is downloaded by looking only at one hard-coded model (large-v3-turbo), so when a different registered Whisper model is the one downloaded or selected, the health report says Whisper is missing.",
+    "detail": "The /health endpoint decides whether Whisper is downloaded by looking only at one hard-coded model (large-v3-turbo), so when a different registered Whisper model is the one downloaded or selected, the health report says Whisper is missing.",
+    "file": "src-tauri/sidecar/server.py",
+    "line_start": 703,
+    "line_end": 703,
+    "weight": 2.0
+  },
+  {
+    "id": "vo-t01-k02",
+    "title": "The transcription endpoints call the blocking Whisper function directly inside async handlers, so a transcription freezes the sidecar's event loop and every other request (health checks, status polls) stalls until it finishes.",
+    "detail": "The transcription endpoints call the blocking Whisper function directly inside async handlers, so a transcription freezes the sidecar's event loop and every other request (health checks, status polls) stalls until it finishes.",
+    "file": "src-tauri/sidecar/server.py",
+    "line_start": 733,
+    "line_end": 733,
+    "weight": 2.0
+  },
+  {
+    "id": "vo-t01-k03",
+    "title": "When scanning the model cache raises, the failure is logged but the 'not downloaded' result is still stored in the 30 second cache, so a transient error makes an installed model look missing for the next 30 seconds.",
+    "detail": "When scanning the model cache raises, the failure is logged but the 'not downloaded' result is still stored in the 30 second cache, so a transient error makes an installed model look missing for the next 30 seconds.",
+    "file": "src-tauri/sidecar/server.py",
+    "line_start": 689,
+    "line_end": 690,
+    "weight": 1.0
+  },
+  {
+    "id": "vo-t01-k04",
+    "title": "An unknown Whisper model name is silently used as a Hugging Face repo id instead of being rejected, so a typo or a stale saved setting makes the sidecar try to download and load an arbitrary repository.",
+    "detail": "An unknown Whisper model name is silently used as a Hugging Face repo id instead of being rejected, so a typo or a stale saved setting makes the sidecar try to download and load an arbitrary repository.",
+    "file": "src-tauri/sidecar/tts.py",
+    "line_start": 161,
+    "line_end": 161,
+    "weight": 1.0
+  },
+  {
+    "id": "vo-t01-p01",
+    "title": "The new delete-model command builds the sidecar URL by pasting the frontend-supplied model name into the path with no validation, so a name containing path segments reaches other sidecar routes with the DELETE method (for example a voice profile), outside the model routes the command is meant for.",
+    "detail": "The new delete-model command builds the sidecar URL by pasting the frontend-supplied model name into the path with no validation, so a name containing path segments reaches other sidecar routes with the DELETE method (for example a voice profile), outside the model routes the command is meant for.",
+    "file": "src-tauri/src/models.rs",
+    "line_start": 147,
+    "line_end": 147,
+    "weight": 1.0
+  }
+]
