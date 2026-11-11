@@ -142,18 +142,16 @@ If the user requested "review and fix":
 - Describe Medium fixes that require manual intervention
 - Skip Low-priority items unless trivial
 
-## Multi-step Runs: One Reviewer per Rule Section
+## Multi-step Runs: One Reviewer per Role
 
-A runner can split one review into steps, each a fresh agent: one reviewer per rule section, then a report step. `ocr delegate rule --format json` lists each group's `sections` (the headings of its rule; `General` for a rule with none), so the runner starts one reviewer for each section the change's rules hold. Your instructions say which part you are.
+A runner can split one review into steps, each a fresh agent: reviewers that each take one role (`security`, `tests`, `correctness`, and so on), then a report step. Your instructions say which part you are.
 
-**When you are the `<section>` reviewer:**
+**When you are the `<role>` reviewer:**
 
-1. Skip Step 1. Review the files your instructions list, between the refs they give.
-2. In Step 2 add `--section "<section>"`. Each file's rule comes back cut to its shared text and that one section; a file whose rule has no such section does not come back, and another reviewer covers it.
-3. Do Steps 3 to 5 against those rules only. Look for every defect your section describes; leave other kinds of finding to their reviewers.
-4. Write `{"comments": [...], "files": [{"path": ..., "status": "reviewed" | "skipped", "reason": ...}]}` to the file your instructions name, with every file Step 2 returned in `files`, and write nothing else. Skip Steps 6 and 7.
+1. Do Steps 1 to 4 for the refs your instructions give: every reviewable file, with every rule Step 2 returns for it, reviewed as the `<role>` reviewer.
+2. Write `{"comments": [...], "files": [{"path": ..., "status": "reviewed" | "skipped", "reason": ...}]}` to the file your instructions name, each comment in Step 5's format and every reviewable file in `files`, and write nothing else. Skip Steps 6 and 7.
 
-**When you are the report step:** your instructions name the file holding every reviewer's comments and the preview. Do Step 6 over them: check each comment against the code, merge duplicates, discard false positives, and write the comments that stand to the file your instructions name.
+**When you are the report step:** the output folder your instructions name holds `merged.json`, every reviewer's comments and files, and `preview.json`, Step 1's output. Do Step 6 over them: check each comment against the code, merge duplicates, discard false positives, and write the comments that stand to `report.json` in that folder as `{"comments": [...]}`. Write nothing else.
 
 ## Sub-commands Reference
 
@@ -161,7 +159,7 @@ A runner can split one review into steps, each a fresh agent: one reviewer per r
 |---------|---------|
 | `ocr delegate preview` | Which files to review + mode/ref metadata |
 | `ocr delegate rule <path...>` | Review rules grouped by content |
-| `ocr delegate rule --section <heading> <path...>` | One section of those rules, for that section's reviewer |
+| `ocr delegate rule --section <heading> <path...>` | One section of those rules |
 
 ## Shared Flags
 
