@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -217,6 +218,61 @@ func TestExecuteDelegateRuleJSON(t *testing.T) {
 	}
 	if len(got.Groups[0].Files) != 1 || got.Groups[0].Files[0] != "README.md" || got.Groups[0].Rule == "" {
 		t.Fatalf("unexpected rule group: %#v", got.Groups[0])
+	}
+}
+
+func TestExecuteDelegateRuleJSONListsSections(t *testing.T) {
+	dir := initTestGitRepo(t)
+	out := captureDelegateStdout(t, func() {
+		if err := executeDelegateRule(delegateOptions{repoDir: dir, format: "json"}, []string{"main.go"}); err != nil {
+			t.Fatalf("executeDelegateRule(json) error: %v", err)
+		}
+	})
+	var got delegateRulesJSON
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("decode rules JSON: %v\n%s", err, out)
+	}
+	if len(got.Groups) != 1 || len(got.Groups[0].Sections) < 2 {
+		t.Fatalf("want one group listing its sections: %#v", got.Groups)
+	}
+	if want := delegate.Sections(got.Groups[0].Rule); !slices.Equal(got.Groups[0].Sections, want) {
+		t.Fatalf("sections = %q, want %q", got.Groups[0].Sections, want)
+	}
+}
+
+func TestExecuteDelegateRuleSection(t *testing.T) {
+	dir := initTestGitRepo(t)
+	all := captureDelegateStdout(t, func() {
+		if err := executeDelegateRule(delegateOptions{repoDir: dir, format: "json"}, []string{"main.go"}); err != nil {
+			t.Fatalf("executeDelegateRule(json) error: %v", err)
+		}
+	})
+	var full delegateRulesJSON
+	if err := json.Unmarshal(all, &full); err != nil {
+		t.Fatalf("decode rules JSON: %v", err)
+	}
+	first, second := full.Groups[0].Sections[0], full.Groups[0].Sections[1]
+
+	out := captureDelegateStdout(t, func() {
+		opts := delegateOptions{repoDir: dir, format: "json", section: second}
+		if err := executeDelegateRule(opts, []string{"main.go"}); err != nil {
+			t.Fatalf("executeDelegateRule(section) error: %v", err)
+		}
+	})
+	var got delegateRulesJSON
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("decode rules JSON: %v\n%s", err, out)
+	}
+	if len(got.Groups) != 1 || !slices.Equal(got.Groups[0].Sections, []string{second}) {
+		t.Fatalf("want the one section %q: %#v", second, got.Groups)
+	}
+	if !strings.Contains(got.Groups[0].Rule, second) || strings.Contains(got.Groups[0].Rule, first) {
+		t.Fatalf("rule kept other sections:\n%s", got.Groups[0].Rule)
+	}
+
+	err := executeDelegateRule(delegateOptions{repoDir: dir, format: "json", section: "No Such Section"}, []string{"main.go"})
+	if err == nil || !strings.Contains(err.Error(), first) {
+		t.Fatalf("a section no file has must fail and name the sections there are, got %v", err)
 	}
 }
 

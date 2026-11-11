@@ -28,6 +28,7 @@ func TestRuleGroupsMarkdown(t *testing.T) {
 				"### Rule Group 1: project / *.go",
 				"- a.go",
 				"- b.go",
+				"Sections: General",
 				"#### Content",
 				"Review Go code",
 			},

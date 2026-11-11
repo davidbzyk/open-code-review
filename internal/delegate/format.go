@@ -20,6 +20,7 @@ func RuleGroupsMarkdown(groups []RuleGroup) string {
 		for _, f := range g.Files {
 			fmt.Fprintf(&b, "- %s\n", f)
 		}
+		fmt.Fprintf(&b, "\nSections: %s\n", strings.Join(g.Sections(), "; "))
 		b.WriteString("\n#### Content\n\n")
 		b.WriteString(g.Text)
 		b.WriteByte('\n')
