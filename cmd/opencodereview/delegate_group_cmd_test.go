@@ -166,3 +166,29 @@ func TestDelegateMergeFailsWithoutGroups(t *testing.T) {
 		t.Error("merge succeeded in a folder with no groups.json")
 	}
 }
+
+func TestDelegateGroupLeavesNoFileOfTheOtherOutcome(t *testing.T) {
+	dir := groupTestRepo(t, 5)
+	out := filepath.Join(t.TempDir(), "review")
+	opts := delegateGroupOptions{delegateOptions: delegateOptions{repoDir: dir, from: "HEAD~1", to: "HEAD"}, outDir: out}
+	opts.apply = filepath.Join(out, "missing.json")
+	runDelegateGroup(t, opts, true)
+
+	// A request for the same folder means the partition is not known yet.
+	opts.apply = ""
+	runDelegateGroup(t, opts, false)
+	for _, stale := range []string{delegate.GroupsFile, delegate.GroupsDir} {
+		if _, err := os.Stat(filepath.Join(out, stale)); !os.IsNotExist(err) {
+			t.Errorf("%s of the earlier partition is still there beside the new request (err=%v)", stale, err)
+		}
+	}
+
+	// And groups written without a model leave no request to answer.
+	small := initTestGitRepo(t)
+	gitCommitFile(t, small, "b.go", "package b\n", "small change")
+	opts.repoDir = small
+	runDelegateGroup(t, opts, false)
+	if _, err := os.Stat(filepath.Join(out, delegate.GroupingRequestFile)); !os.IsNotExist(err) {
+		t.Errorf("the earlier grouping request is still there beside the groups (err=%v)", err)
+	}
+}

@@ -134,6 +134,13 @@ func executeDelegateGroup(opts delegateGroupOptions, applying bool) error {
 	if grouping.Groups == nil {
 		status.NeedsAnswer = true
 		status.Request = filepath.Join(opts.outDir, delegate.GroupingRequestFile)
+		// The partition is not known until the answer is applied: an earlier one
+		// left here would read as this change's groups.
+		for _, stale := range []string{delegate.GroupsFile, delegate.GroupsDir} {
+			if err := os.RemoveAll(filepath.Join(opts.outDir, stale)); err != nil {
+				return fmt.Errorf("remove earlier groups: %w", err)
+			}
+		}
 		if err := os.WriteFile(status.Request, []byte(groupingRequestMarkdown(grouping.Request)), 0o644); err != nil {
 			return fmt.Errorf("write grouping request: %w", err)
 		}
@@ -153,6 +160,12 @@ func executeDelegateGroup(opts delegateGroupOptions, applying bool) error {
 		}
 		if err := delegate.WriteGroups(opts.outDir, groups); err != nil {
 			return fmt.Errorf("write groups: %w", err)
+		}
+		if !applying {
+			// Groups written without a model leave no request for an agent to answer.
+			if err := os.RemoveAll(filepath.Join(opts.outDir, delegate.GroupingRequestFile)); err != nil {
+				return fmt.Errorf("remove earlier grouping request: %w", err)
+			}
 		}
 		status.Groups = len(groups.Groups)
 		status.Fallback = grouping.Fallback
