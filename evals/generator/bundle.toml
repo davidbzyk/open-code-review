@@ -1,0 +1,33 @@
+# What the Open Code Review evals fix themselves. Everything else in a task (the snapshot, the
+# answer key, the grader, the base images, the network lists) comes from the code-review team
+# task a case names in cases.toml.
+dataset = "open-code-review"
+
+[ocr]
+# The agent image builds `ocr` from this repository at the newest commit that touched `paths`.
+repo = "https://github.com/davidbzyk/open-code-review.git"
+paths = ["cmd", "internal", "go.mod", "go.sum"]
+# The skills baked into the agent image, from this repository's skills/ folder.
+skills = ["open-code-review-delegate", "open-code-review-orchestrator"]
+
+[images]
+# The Go toolchain for that build, at or above go.mod's version, pinned by digest.
+golang = "golang:1.27.3-trixie@sha256:af1bfc2614ebb1dbd31af514b78740fd678850e76498762b425ecee4c5c6ea80"
+
+[agent]
+# Under the team task's workdir: the folder every step writes to, and the snapshot's folder.
+review_dir = "review"
+repo_dir = "repo"
+# The collect script and the rule file, outside the agent's writable tree.
+eval_dir = "/opt/review-eval"
+# The report the collect hook hands the grader; a bigger file is not graded.
+max_report_bytes = 5000000
+# Hosts the image build reaches beyond the team task's: Go's module proxy and this repository.
+build_hosts = ["proxy.golang.org", "sum.golang.org", "storage.googleapis.com", "github.com"]
+
+# The team reviewers' levels, for the oracle's comments.
+[oracle_severity]
+P0 = "critical"
+P1 = "high"
+P2 = "medium"
+P3 = "low"

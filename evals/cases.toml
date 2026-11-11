@@ -1,0 +1,19 @@
+# One row per case. A case is a published code-review team task: its snapshot, answer key and
+# grader are reused as they are, so Open Code Review is scored on the same criteria as the
+# review team. `[sources.<name>]` is a repository at one commit (`repo`, `commit`, `tasks`) or a
+# folder beside this file (`path`).
+
+[sources.code_review]
+repo = "https://github.com/davidbzyk/code_review.git"
+commit = "15ed41eeca9cc1c11a774df214343a8ef0bacaab"
+tasks = "evals/team-tasks"
+
+# Rust, TypeScript and Svelte; 10 changed files.
+[[cases]]
+source = "code_review"
+task = "vo-t06"
+
+# Rust, TypeScript, Svelte and Python; 18 changed files.
+[[cases]]
+source = "code_review"
+task = "vo-t01"
