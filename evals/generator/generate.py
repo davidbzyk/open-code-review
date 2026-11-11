@@ -707,7 +707,8 @@ def differences(a: Path, b: Path) -> list[str]:
         for n, sub in cmp.subdirs.items():
             walk(sub, f"{prefix}{n}/")
 
-    walk(filecmp.dircmp(a, b), "")
+    # ignore=[] and hide=[]: dircmp skips names such as __pycache__ and tags by default.
+    walk(filecmp.dircmp(a, b, ignore=[], hide=[]), "")
     return sorted(set(found))
 
 
