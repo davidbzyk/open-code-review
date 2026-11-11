@@ -294,6 +294,19 @@ class Collect(unittest.TestCase):
         self.assertEqual(json.loads((self.artifacts / "findings.json").read_text()), [])
 
 
+class Differences(unittest.TestCase):
+    """The folder comparison behind --check and the grader-copy test."""
+
+    def test_a_name_dircmp_ignores_by_default_still_counts(self):
+        root = Path(tempfile.mkdtemp(prefix="ocr-diff-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for side, text in (("a", "one"), ("b", "two")):
+            (root / side / "__pycache__").mkdir(parents=True)
+            (root / side / "tags").write_text(text)
+            (root / side / "__pycache__" / "x.pyc").write_text(text)
+        self.assertEqual(generate.differences(root / "a", root / "b"), ["__pycache__/x.pyc", "tags"])
+
+
 class Manifest(unittest.TestCase):
     """The TOML the generator writes by hand."""
 
