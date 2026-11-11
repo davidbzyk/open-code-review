@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/alibaba/open-code-review/internal/agent"
 	"github.com/alibaba/open-code-review/internal/config/rules"
@@ -28,6 +30,7 @@ type delegateOptions struct {
 	backgroundFile string
 	maxGitProcs    int
 	format         string
+	section        string
 }
 
 var delegatePreviewOpts delegateOptions
@@ -47,7 +50,10 @@ Output review spec for host-agent delegation (no LLM required).`,
   ocr delegate preview
 
   # Get rules for multiple files (grouped by content)
-  ocr delegate rule internal/agent/agent.go internal/llm/client.go`,
+  ocr delegate rule internal/agent/agent.go internal/llm/client.go
+
+  # Get only one section of those rules, for a reviewer that owns that section
+  ocr delegate rule --section Security internal/agent/agent.go internal/llm/client.go`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
@@ -83,6 +89,8 @@ var delegateRuleCmd = &cobra.Command{
 func init() {
 	registerDelegateFlags(delegatePreviewCmd, &delegatePreviewOpts)
 	registerDelegateFlags(delegateRuleCmd, &delegateRuleOpts)
+	delegateRuleCmd.Flags().StringVar(&delegateRuleOpts.section, "section", "",
+		"keep only this section of each rule (a heading from the groups' \"sections\"); files without it are left out")
 	delegateCmd.AddCommand(delegatePreviewCmd)
 	delegateCmd.AddCommand(delegateRuleCmd)
 }
@@ -233,6 +241,14 @@ func executeDelegateRule(opts delegateOptions, paths []string) error {
 	}
 
 	groups := delegate.GroupRules(dc.resolver(), paths)
+	if opts.section != "" {
+		kept := delegate.FilterSection(groups, opts.section)
+		if len(kept) == 0 {
+			return fmt.Errorf("no rule for these files has a section %q; their sections are: %s",
+				opts.section, strings.Join(allSections(groups), "; "))
+		}
+		groups = kept
+	}
 	if opts.format == "json" {
 		return writeDelegateJSON(delegateRulesJSON{
 			SchemaVersion: delegateSchemaVersion,
@@ -272,11 +288,25 @@ type delegatePreviewJSON struct {
 }
 
 type delegateRuleGroupJSON struct {
-	GroupID int      `json:"group_id"`
-	Source  string   `json:"source"`
-	Pattern string   `json:"pattern"`
-	Files   []string `json:"files"`
-	Rule    string   `json:"rule"`
+	GroupID  int      `json:"group_id"`
+	Source   string   `json:"source"`
+	Pattern  string   `json:"pattern"`
+	Files    []string `json:"files"`
+	Sections []string `json:"sections"`
+	Rule     string   `json:"rule"`
+}
+
+// allSections lists every group's section headings once, in first-seen order.
+func allSections(groups []delegate.RuleGroup) []string {
+	var names []string
+	for _, group := range groups {
+		for _, name := range group.Sections() {
+			if !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }
 
 type delegateRulesJSON struct {
@@ -306,12 +336,14 @@ func ruleGroupsJSON(groups []delegate.RuleGroup) []delegateRuleGroupJSON {
 	for _, group := range groups {
 		files := make([]string, 0, len(group.Files))
 		files = append(files, group.Files...)
+		sections := append(make([]string, 0), group.Sections()...)
 		out = append(out, delegateRuleGroupJSON{
-			GroupID: group.ID,
-			Source:  group.Source,
-			Pattern: group.Pattern,
-			Files:   files,
-			Rule:    group.Text,
+			GroupID:  group.ID,
+			Source:   group.Source,
+			Pattern:  group.Pattern,
+			Files:    files,
+			Sections: sections,
+			Rule:     group.Text,
 		})
 	}
 	return out
